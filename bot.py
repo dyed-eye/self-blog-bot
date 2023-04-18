@@ -19,7 +19,9 @@ async def on_ready():
 @bot.command(pass_context=True)
 @commands.is_owner()
 async def update_tree(ctx):
-    await bot.tree.sync()
+    res = await bot.tree.sync()
+    print(res)
+    await ctx.message.delete()
     print('Tree has been updated successfully!')
 
 async def load():
