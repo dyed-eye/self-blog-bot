@@ -11,20 +11,9 @@ intents.messages = True
 
 bot = commands.Bot("~", intents=intents)
 
-async def make_buttons_work(bot):
-    data = await server.get_data()
-    channel = bot.get_channel(data['channel_start'])
-    message = await channel.fetch_message(data["rules_message"])
-    #await message.edit(view=buttons.button_to_start())
-
 @bot.event
 async def on_ready():
     print(f'Bot started as {bot.user}')
-    try:
-        await make_buttons_work(bot)
-        print(f'Buttons are working!')
-    except Exception:
-        raise Exception('Something went wrong activating the buttons')
         
 @bot.event
 async def on_interaction(int: discord.Interaction):
