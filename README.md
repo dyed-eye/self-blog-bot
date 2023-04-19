@@ -20,9 +20,9 @@ Currently, one client supports only one guild
 - Administrator creates a channel3 where the presentation cards of blogs will be posted
 	- After changing a blog's info by its creator the presentation card will be re-posted
 	- Every presentation card has a button allowing other users to follow the blog
-	- Every other user has to be approved by blog's owner before accessing it :red_circle: *I am not sure about it yet* :red_circle:
+	- No one has to be approved by blog's owner before accessing it :yellow_circle: *I've decided that it's OK to make blogs completely open to follow* :yellow_circle:
 - Bot creates its own category for text channels where the blogs will take their place
-	- In the text channel of a blog the owner has to post directly - after each message the bot creates a discussion where anyone can comment :yellow_circle: *perhaps, in future the owner will be able to turn off the comments in his/her blog* :orange_circle:
+	- In the text channel of a blog the owner has to post directly - after each message the bot creates a discussion where anyone can comment :yellow_circle: *perhaps, in future the owner will be able to turn off the comments in his/her blog* :yellow_circle:
 
 
 Thanks for your attention! Feel free to contact me with any questions and considerations

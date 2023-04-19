@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-import os, asyncio, json
+import os, asyncio, json, sqlite3
 import buttons, server
 
 
@@ -15,11 +15,6 @@ bot = commands.Bot("~", intents=intents)
 async def on_ready():
     print(f'Bot started as {bot.user}')
         
-@bot.event
-async def on_interaction(int: discord.Interaction):
-    ...
-    #print(int.data)
-    
 @bot.command(pass_context=True)
 @commands.is_owner()
 async def update_tree(ctx):
@@ -34,6 +29,24 @@ async def get_data(ctx):
     res = await server.get_data()
     await ctx.message.delete()
     await ctx.author.send(json.dumps(res))
+        
+@bot.command()
+@commands.is_owner()
+async def sql(ctx):
+    req = ctx.message.content[4:]
+    if len(req) == 0:
+        return        
+    conn = sqlite3.connect("database.db", timeout=20)
+    db = conn.cursor()
+    try:
+        res = db.execute(req[1:]).fetchall()
+        await ctx.author.send(res)
+    except Exception as e:
+        await ctx.author.send(e)
+    await ctx.message.delete()
+    conn.commit()
+    db.close()
+    conn.close()
 
 async def load():
 	for filename in os.listdir("./cogs"):
