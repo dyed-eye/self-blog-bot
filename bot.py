@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
-import os
-import asyncio
+import os, asyncio, json
+import buttons, server
 
 
 intents = discord.Intents.default()
@@ -11,10 +11,25 @@ intents.messages = True
 
 bot = commands.Bot("~", intents=intents)
 
+async def make_buttons_work(bot):
+    data = await server.get_data()
+    channel = bot.get_channel(data['channel_start'])
+    message = await channel.fetch_message(data["rules_message"])
+    #await message.edit(view=buttons.button_to_start())
+
 @bot.event
 async def on_ready():
-	# await bot.add_cog(Greetings(bot))
-	print(f'Bot started as {bot.user}')
+    print(f'Bot started as {bot.user}')
+    try:
+        await make_buttons_work(bot)
+        print(f'Buttons are working!')
+    except Exception:
+        raise Exception('Something went wrong activating the buttons')
+        
+@bot.event
+async def on_interaction(int: discord.Interaction):
+    ...
+    #print(int.data)
     
 @bot.command(pass_context=True)
 @commands.is_owner()
@@ -23,6 +38,13 @@ async def update_tree(ctx):
     print(res)
     await ctx.message.delete()
     print('Tree has been updated successfully!')
+    
+@bot.command(pass_context=True)
+@commands.is_owner()
+async def get_data(ctx):
+    res = await server.get_data()
+    await ctx.message.delete()
+    await ctx.author.send(json.dumps(res))
 
 async def load():
 	for filename in os.listdir("./cogs"):
@@ -31,7 +53,6 @@ async def load():
 
 async def main():
 	async with bot:
-		token = ''
 		with open('config0.txt', 'r') as f:
 			token = f.read()
 		await load()
