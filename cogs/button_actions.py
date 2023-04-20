@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
-import sqlite3
-from datetime import datetime
-import buttons, server
+from datetime, time import datetime, time
+import buttons, server, db
 
 
 class button_actions(commands.Cog):
@@ -11,17 +10,21 @@ class button_actions(commands.Cog):
         print('button_actions started!')
         
     async def create(self, author, title, description):
-        guild = await server.get_data()
-        cat = self.bot.get_channel(guild['blogs'])
-        default_role = cat.guild.get_role(guild['default_role'])
-        user = self.bot.get_user(author)
-        channel = await cat.create_text_channel(title, reason="Создание блога", topic=description, overwrites={
-            cat.guild.default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
-            default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, create_private_threads=False, create_public_threads=True)
-        })
-        channel_presentation = self.bot.get_channel(guild['channel_presentation'])
-        presentation = await channel_presentation.send(embed=discord.Embed.from_dict({"title":title, "description":description, "color":int("ac377c",16), "footer":{"text":f"{user.name}#{user.discriminator}", "icon_url":user.avatar.url}}), view=buttons.buttons_to_follow())
+        try:
+            guild = await server.get_data()
+            cat = self.bot.get_channel(guild['blogs'])
+            default_role = cat.guild.get_role(guild['default_role'])
+            user = self.bot.get_user(author)
+            channel = await cat.create_text_channel(title, reason="Создание блога", topic=description, overwrites={
+                cat.guild.default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
+                default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
+                user: discord.PermissionOverwrite(read_messages=True, send_messages=True, create_private_threads=False, create_public_threads=True)
+            })
+            channel_presentation = self.bot.get_channel(guild['channel_presentation'])
+            presentation = await channel_presentation.send(embed=discord.Embed.from_dict({"title":title, "description":description, "color":int("ac377c",16), "footer":{"text":f"{user.name}#{user.discriminator}", "icon_url":user.avatar.url}}), view=buttons.buttons_to_follow())
+        except Exception as e:
+            print(f'Creating problem: {e}')
+            presentation.id, channel.id = await self.create(author, title, description)
         return presentation.id, channel.id
         
     async def edit(self, author, title, description, presentation, blog):
@@ -36,19 +39,18 @@ class button_actions(commands.Cog):
         return presentation.id
 
     async def create_blog(self, interaction:discord.Interaction):
-        conn = sqlite3.connect("database.db")
-        db = conn.cursor()
-        status = db.execute(f'SELECT status FROM applications WHERE author={interaction.user.id} LIMIT 1').fetchall()
-        if len(status) > 0:
-            if status[0] == "rejected":
-                blog = db.execute(f'SELECT * FROM blogs WHERE author={interaction.user.id} LIMIT 1').fetchall()
-                if len(blog) > 0:
+        status = await db.get(f'SELECT status FROM applications WHERE author={interaction.user.id}')
+        if status is not None: # application exists
+            if status[0] == "rejected": # last application was rejected
+                blog = await db.get(f'SELECT * FROM blogs WHERE author={interaction.user.id}')
+                if blog is not None: # blog exists
                     await interaction.response.send_message("У вас уже есть блог!", ephemeral=True)
                     return
-            else:
+                # else first application was rejected and blog has never been created -> pass
+            else: # blog was created or is being created
                 await interaction.response.send_message("У вас уже есть блог!", ephemeral=True)
                 return
-        db.execute(f"INSERT INTO applications VALUES ({interaction.user.id}, 'new', 'title', 'description', 0)")
+        res = await db.commit(f"INSERT INTO applications VALUES ({interaction.user.id}, 'new', 'title', 'description', 0)")
         await interaction.user.send("Вы подали заявку на создание блога! В ответ на это сообщение напишите его будущее название")
         await interaction.response.send_message("Проверьте личные сообщения!", ephemeral=True)
         def check(m):
@@ -67,9 +69,6 @@ class button_actions(commands.Cog):
         msg = await channel.send(embed=discord.Embed.from_dict({"title":"Заявка на создание блога", "description":f"**{title}**\n{description}", "color":int("ac377c",16), "footer":{"text":f"{interaction.user.name}#{interaction.user.discriminator} ({interaction.user.id})", "icon_url":interaction.user.avatar.url}}), view=buttons.buttons_to_approve())
         db.execute("UPDATE applications SET status = 'created', title = ?, description = ?, moderation = ? WHERE author = ?", (title, description, msg.id, interaction.user.id))
         await interaction.user.send("Отлично! Ваша заявка на создание блога уже рассматривается модерацией, ожидайте")
-        conn.commit()
-        db.close()
-        conn.close()
 
     async def edit_blog(self, interaction:discord.Interaction):
         conn = sqlite3.connect("database.db")
@@ -85,6 +84,7 @@ class button_actions(commands.Cog):
             db.execute(f"UPDATE applications SET status = 'edited' WHERE author={interaction.user.id}")
         except Exception as e:
             print(f'Updating applications in edit_blog problem: {e}')
+            self.edit_blog(interaction)
         await interaction.user.send("Вы подали заявку на редактирование блога! В ответ на это сообщение напишите его новое название")
         await interaction.response.send_message("Проверьте личные сообщения!", ephemeral=True)
         def check(m):
@@ -117,7 +117,8 @@ class button_actions(commands.Cog):
             if status == "created":
                 await user.send(f'Поздравляю! Ваша заявка на создание блога "{title}" одобрена')
                 presentation, blog = await self.create(author, title, description)
-                db.execute(f"INSERT INTO blogs VALUES (?, ?, ?, ?, ?, ?)", (author, title, description, presentation, blog, datetime.today().strftime('%Y-%m-%d')))
+                datetoday = datetime.today().strftime('%Y-%m-%d')
+                db.execute(f"INSERT INTO blogs VALUES (?, ?, ?, ?, ?, ?)", (author, title, description, presentation, blog, datetoday))
             else:
                 res = db.execute(f"SELECT presentation, blog FROM blogs WHERE author = {author}").fetchone()
                 presentation, blog = res

@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
-import os, asyncio, json, sqlite3
-import buttons, server
+import os, asyncio, json
+import buttons, server, db
 
 
 intents = discord.Intents.default()
@@ -36,17 +36,19 @@ async def sql(ctx):
     req = ctx.message.content[4:]
     if len(req) == 0:
         return        
-    conn = sqlite3.connect("database.db", timeout=20)
-    db = conn.cursor()
     try:
-        res = db.execute(req[1:]).fetchall()
-        await ctx.author.send(res)
+        if req.lower().startswith(" select"):
+            res = await db.get_all(req[1:])
+            await ctx.author.send(res)
+        else:
+            res = await db.commit(req[1:])
+            if res:
+                await ctx.author.send('Success')
+            else:
+                await ctx.author.send('Failed')
     except Exception as e:
         await ctx.author.send(e)
     await ctx.message.delete()
-    conn.commit()
-    db.close()
-    conn.close()
 
 async def load():
 	for filename in os.listdir("./cogs"):
