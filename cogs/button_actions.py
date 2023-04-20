@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from datetime, time import datetime, time
+from datetime import datetime
+import time
 import buttons, server, db
 
 
@@ -41,6 +42,7 @@ class button_actions(commands.Cog):
     async def create_blog(self, interaction:discord.Interaction):
         status = await db.get(f'SELECT status FROM applications WHERE author={interaction.user.id}')
         if status is not None: # application exists
+            # nota bene: status is a one element tuple so we have use it like below (either status_string,=status )
             if status[0] == "rejected": # last application was rejected
                 blog = await db.get(f'SELECT * FROM blogs WHERE author={interaction.user.id}')
                 if blog is not None: # blog exists
@@ -51,6 +53,10 @@ class button_actions(commands.Cog):
                 await interaction.response.send_message("У вас уже есть блог!", ephemeral=True)
                 return
         res = await db.commit(f"INSERT INTO applications VALUES ({interaction.user.id}, 'new', 'title', 'description', 0)")
+        if not res:
+            print('Creating blog failed on creation of application, trying again...')
+            time.sleep(2)
+            self.create_blog(interaction)
         await interaction.user.send("Вы подали заявку на создание блога! В ответ на это сообщение напишите его будущее название")
         await interaction.response.send_message("Проверьте личные сообщения!", ephemeral=True)
         def check(m):
@@ -67,23 +73,25 @@ class button_actions(commands.Cog):
         guild = await server.get_data()
         channel = self.bot.get_channel(guild['channel_moderation'])
         msg = await channel.send(embed=discord.Embed.from_dict({"title":"Заявка на создание блога", "description":f"**{title}**\n{description}", "color":int("ac377c",16), "footer":{"text":f"{interaction.user.name}#{interaction.user.discriminator} ({interaction.user.id})", "icon_url":interaction.user.avatar.url}}), view=buttons.buttons_to_approve())
-        db.execute("UPDATE applications SET status = 'created', title = ?, description = ?, moderation = ? WHERE author = ?", (title, description, msg.id, interaction.user.id))
+        res = await db.commit(f'''UPDATE applications SET status = 'created', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+        while not res:
+            print("Creating blog failed on updating application, trying again...")
+            time.sleep(2)
+            res = await db.commit(f'''UPDATE applications SET status = 'created', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
         await interaction.user.send("Отлично! Ваша заявка на создание блога уже рассматривается модерацией, ожидайте")
 
     async def edit_blog(self, interaction:discord.Interaction):
-        conn = sqlite3.connect("database.db")
-        db = conn.cursor()
-        status = db.execute(f'SELECT status FROM applications WHERE author={interaction.user.id} LIMIT 1').fetchall()
-        if len(status) == 0:
+        status = await db.get(f'SELECT status FROM applications WHERE author={interaction.user.id}')
+        if status is None:
             await interaction.response.send_message("У вас нет блога!", ephemeral=True)
             return
         elif status[0] in ['new','created','edited']:
             await interaction.response.send_message("Ваш блог находится в процессе создания/модерации!", ephemeral=True)
             return
         try:
-            db.execute(f"UPDATE applications SET status = 'edited' WHERE author={interaction.user.id}")
+            db.commit(f"UPDATE applications SET status = 'edited' WHERE author={interaction.user.id}")
         except Exception as e:
-            print(f'Updating applications in edit_blog problem: {e}')
+            print(f'Editing blog failed on editing the old application, trying again...')
             self.edit_blog(interaction)
         await interaction.user.send("Вы подали заявку на редактирование блога! В ответ на это сообщение напишите его новое название")
         await interaction.response.send_message("Проверьте личные сообщения!", ephemeral=True)
@@ -101,79 +109,109 @@ class button_actions(commands.Cog):
         guild = await server.get_data()
         channel = self.bot.get_channel(guild['channel_moderation'])
         msg = await channel.send(embed=discord.Embed.from_dict({"title":"Заявка на редактирование блога", "description":f"**{title}**\n{description}", "color":int("ac377c",16), "footer":{"text":f"{interaction.user.name}#{interaction.user.discriminator} ({interaction.user.id})", "icon_url":interaction.user.avatar.url}}), view=buttons.buttons_to_approve())
-        db.execute("UPDATE applications SET status = 'edited', title = ?, description = ?, moderation = ? WHERE author = ?", (title, description, msg.id, interaction.user.id))
+        res = await db.commit(f'''UPDATE applications SET status = 'edited', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+        while not res:
+            print("Editing blog failed on updating application, trying again...")
+            time.sleep(2)
+            res = await db.commit(f'''UPDATE applications SET status = 'edited', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
         await interaction.user.send("Отлично! Ваша заявка на редактирование блога уже рассматривается модерацией, ожидайте")
-        conn.commit()
-        db.close()
-        conn.close()
 
     async def approve(self, interaction:discord.Interaction):
-        conn = sqlite3.connect("database.db")
-        db = conn.cursor()
         try:
-            res = db.execute(f"SELECT author, status, title, description FROM applications WHERE moderation = {interaction.message.id}").fetchone()
+            res = await db.get(f"SELECT author, status, title, description FROM applications WHERE moderation = {interaction.message.id}")
+            if res is None:
+                print('Approving failed - application does not exist')
+                await interaction.response.send_message(f"Ошибка: заявка не найдена. Обратитесь к <@478621188860411904>", ephemeral=True)
+                return
             author, status, title, description = res
             user = self.bot.get_user(author)
             if status == "created":
                 await user.send(f'Поздравляю! Ваша заявка на создание блога "{title}" одобрена')
                 presentation, blog = await self.create(author, title, description)
                 datetoday = datetime.today().strftime('%Y-%m-%d')
-                db.execute(f"INSERT INTO blogs VALUES (?, ?, ?, ?, ?, ?)", (author, title, description, presentation, blog, datetoday))
+                res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                while not res:
+                    print('Approving failed on creation of blog, trying again...')
+                    time.sleep(2)
+                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
             else:
-                res = db.execute(f"SELECT presentation, blog FROM blogs WHERE author = {author}").fetchone()
-                presentation, blog = res
-                await user.send(f'Поздравляю! Ваша заявка на редактирование блога "{title}" одобрена')
-                presentation = await self.edit(author, title, description, presentation, blog)
-                db.execute(f'UPDATE blogs SET title = ?, description = ?, presentation = ?, date_of_edit = ? WHERE author = ?', (title, description, presentation, datetime.today().strftime('%Y-%m-%d'), author))
-            db.execute(f"UPDATE applications SET status = 'approved' WHERE moderation = {interaction.message.id}")
+                res = await db.get(f"SELECT presentation, blog FROM blogs WHERE author = {author}")
+                if res is None:
+                    print('Approving went wrong - no old blog found')
+                    print('Creating new blog...')
+                    datetoday = datetime.today().strftime('%Y-%m-%d')
+                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                    while not res:
+                        print('Approving failed on creation of blog, trying again...')
+                        time.sleep(2)
+                        res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                    print('New blog created!')
+                else:
+                    presentation, blog = res
+                    await user.send(f'Поздравляю! Ваша заявка на редактирование блога "{title}" одобрена')
+                    presentation = await self.edit(author, title, description, presentation, blog)
+                    res = await db.commit(f'''UPDATE blogs SET title = {title}, description = {description}, presentation = {presentation}, date_of_edit = {datetime.today().strftime('%Y-%m-%d')} WHERE author = {author}''')
+                    while not res:
+                        print('Approving failed on editing the blog, trying again...')
+                        time.sleep(2)
+                        res = await db.commit(f'''UPDATE blogs SET title = {title}, description = {description}, presentation = {presentation}, date_of_edit = {datetime.today().strftime('%Y-%m-%d')} WHERE author = {author}''')
+            res = await db.commit(f"UPDATE applications SET status = 'approved' WHERE moderation = {interaction.message.id}")
+            while not res:
+                print('Approving failed on setting the "approved" status of the application, trying again...')
+                time.sleep(2)
+                res = await db.commit(f"UPDATE applications SET status = 'approved' WHERE moderation = {interaction.message.id}")
             await interaction.message.edit(content=f"Заявка одобрена модератором <@{interaction.user.id}> ({interaction.user.id})", view=None)
         except Exception as e:
             print(f'Approving problem: {e}')
         await interaction.response.send_message("Заявка одобрена!", ephemeral=True)
-        conn.commit()
-        conn.close()
 
     async def reject(self, interaction:discord.Interaction):
-        conn = sqlite3.connect("database.db")
-        db = conn.cursor()
         try:
-            res = db.execute(f"SELECT author, status, title, description FROM applications WHERE moderation = {interaction.message.id}").fetchone()
+            res = await db.get(f"SELECT author, status, title, description FROM applications WHERE moderation = {interaction.message.id}")
+            if res is None:
+                print('Rejecting failed - application does not exist')
+                await interaction.response.send_message(f"Ошибка: заявка не найдена. Обратитесь к <@478621188860411904>", ephemeral=True)
+                return
             author, status, title, description = res
             user = self.bot.get_user(author)
             if status == "created":
                 await user.send(f'К сожалению, ваша заявка на создание блога "{title}" отклонена')
             else:
                 await user.send(f'К сожалению, ваша заявка на редактирование блога "{title}" отклонена')
-            db.execute(f"UPDATE applications SET status = 'rejected' WHERE moderation = {interaction.message.id}")
+            res = await db.commit(f"UPDATE applications SET status = 'rejected' WHERE moderation = {interaction.message.id}")
+            while not res:
+                print('Rejecting failed on setting the "rejected" status of the application, trying again...')
+                time.sleep(2)
+                res = await db.commit(f"UPDATE applications SET status = 'rejected' WHERE moderation = {interaction.message.id}")
             await interaction.message.edit(content=f"Заявка отклонена модератором <@{interaction.user.id}> ({interaction.user.id})", view=None)
         except Exception as e:
             print(f'Rejecting problem: {e}')
         await interaction.response.send_message("Заявка отклонена!", ephemeral=True)
-        conn.commit()
-        conn.close()
 
     async def follow(self, interaction:discord.Interaction):
         try:
-            conn = sqlite3.connect("database.db")
-            db = conn.cursor()
-            blog, _ = db.execute(f"SELECT blog, author FROM blogs WHERE presentation = {interaction.message.id}").fetchone()
+            res = await db.get(f"SELECT blog, author FROM blogs WHERE presentation = {interaction.message.id}")
+            if res is None:
+                print('Following failed - blog does not exist')
+                await interaction.response.send_message(f"Ошибка: заявка не найдена. Обратитесь к <@478621188860411904>", ephemeral=True)
+                return
+            blog, _ = res
             blog_channel = self.bot.get_channel(blog)
             await blog_channel.set_permissions(interaction.user, read_messages=True, send_messages=False)
             await interaction.response.send_message("Вы подписались!", ephemeral=True)
-            db.close()
-            conn.close()
         except Exception as e:
             print(f'Following problem: {e}')
 
     async def unfollow(self, interaction:discord.Interaction):
-        conn = sqlite3.connect("database.db")
-        db = conn.cursor()
-        blog, _ = db.execute(f"SELECT blog, author FROM blogs WHERE presentation = {interaction.message.id}").fetchone()
+        res = await db.get(f"SELECT blog, author FROM blogs WHERE presentation = {interaction.message.id}")
+        if res is None:
+            print('Following failed - blog does not exist')
+            await interaction.response.send_message(f"Ошибка: заявка не найдена. Обратитесь к <@478621188860411904>", ephemeral=True)
+            return
+        blog, _ = res
         blog_channel = self.bot.get_channel(blog)
         await blog_channel.set_permissions(interaction.user, read_messages=False)
         await interaction.response.send_message("Вы отписались!", ephemeral=True)
-        db.close()
-        conn.close()
     
     @commands.Cog.listener()
     async def on_interaction(self, int: discord.Interaction):
