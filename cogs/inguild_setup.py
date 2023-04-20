@@ -28,18 +28,21 @@ class inguild_setup(commands.GroupCog, name="setup"):
     @discord.app_commands.check(is_guild)
     @discord.app_commands.checks.has_permissions(manage_guild=True)
     async def starter(self, interaction: discord.Interaction, channel: discord.TextChannel, title: str):
-        await interaction.response.send_message("Отправьте содержание сообщения", ephemeral=True, delete_after=30)
-        def check(m):
-            return (m.author.id == interaction.user.id) & (m.channel.id == interaction.channel.id)
         try:
-            msg = await self.bot.wait_for('message', check=check, timeout=30)
-        except TimeoutError:
-            print('TimeoutError')
-        await msg.delete()
-        rules_message = await channel.send(
-        embed=discord.Embed.from_dict({"title":title,"description":msg.content,"color":int("ac377c",16),"footer":{"text":f"{self.bot.user.name}#{self.bot.user.discriminator}","icon_url":self.bot.user.avatar.url}}), view=buttons.button_to_start(self.bot))
-        res1 = await server.set_value("channel_start", channel.id)
-        res2 = await server.set_value("rules_message", rules_message.id)
+            await interaction.response.send_message("Отправьте содержание сообщения", ephemeral=True, delete_after=30)
+            def check(m):
+                return (m.author.id == interaction.user.id) & (m.channel.id == interaction.channel.id)
+            try:
+                msg = await self.bot.wait_for('message', check=check, timeout=30)
+            except TimeoutError:
+                print('TimeoutError')
+            await msg.delete()
+            rules_message = await channel.send(
+            embed=discord.Embed.from_dict({"title":title,"description":msg.content,"color":int("ac377c",16),"footer":{"text":f"{self.bot.user.name}#{self.bot.user.discriminator}","icon_url":self.bot.user.avatar.url}}), view=buttons.button_to_start())
+            res1 = await server.set_value("channel_start", channel.id)
+            res2 = await server.set_value("rules_message", rules_message.id)
+        except Exception as e:
+            print(f'/setup starter problem: {e}')
 
     @discord.app_commands.command(description="Выбрать канал для модерации заявок")
     @discord.app_commands.check(is_guild)

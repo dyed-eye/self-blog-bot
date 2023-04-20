@@ -14,7 +14,7 @@ class blog_commentator(commands.Cog):
             try:
                 await message.create_thread(name=message.content[:95], reason="Комментарии")
             except Exception as e:
-                print(e)
+                print(f'Creating thread problem: {e}')
         
 async def setup(bot):
     await bot.add_cog(blog_commentator(bot))

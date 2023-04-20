@@ -55,7 +55,7 @@ async def load():
 
 async def main():
 	async with bot:
-		with open('config0.txt', 'r') as f:
+		with open('config.txt', 'r') as f:
 			token = f.read()
 		await load()
 		await bot.start(token)

@@ -16,6 +16,7 @@ class button_actions(commands.Cog):
         default_role = cat.guild.get_role(guild['default_role'])
         user = self.bot.get_user(author)
         channel = await cat.create_text_channel(title, reason="Создание блога", topic=description, overwrites={
+            cat.guild.default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
             default_role: discord.PermissionOverwrite(read_messages=False, send_messages=False, create_private_threads=False, create_public_threads=False),
             user: discord.PermissionOverwrite(read_messages=True, send_messages=True, create_private_threads=False, create_public_threads=True)
         })
@@ -83,7 +84,7 @@ class button_actions(commands.Cog):
         try:
             db.execute(f"UPDATE applications SET status = 'edited' WHERE author={interaction.user.id}")
         except Exception as e:
-            print(e)
+            print(f'Updating applications in edit_blog problem: {e}')
         await interaction.user.send("Вы подали заявку на редактирование блога! В ответ на это сообщение напишите его новое название")
         await interaction.response.send_message("Проверьте личные сообщения!", ephemeral=True)
         def check(m):
@@ -126,7 +127,7 @@ class button_actions(commands.Cog):
             db.execute(f"UPDATE applications SET status = 'approved' WHERE moderation = {interaction.message.id}")
             await interaction.message.edit(content=f"Заявка одобрена модератором <@{interaction.user.id}> ({interaction.user.id})", view=None)
         except Exception as e:
-            print(e)
+            print(f'Approving problem: {e}')
         await interaction.response.send_message("Заявка одобрена!", ephemeral=True)
         conn.commit()
         conn.close()
@@ -145,7 +146,7 @@ class button_actions(commands.Cog):
             db.execute(f"UPDATE applications SET status = 'rejected' WHERE moderation = {interaction.message.id}")
             await interaction.message.edit(content=f"Заявка отклонена модератором <@{interaction.user.id}> ({interaction.user.id})", view=None)
         except Exception as e:
-            print(e)
+            print(f'Rejecting problem: {e}')
         await interaction.response.send_message("Заявка отклонена!", ephemeral=True)
         conn.commit()
         conn.close()
@@ -161,7 +162,7 @@ class button_actions(commands.Cog):
             db.close()
             conn.close()
         except Exception as e:
-            print(e)
+            print(f'Following problem: {e}')
 
     async def unfollow(self, interaction:discord.Interaction):
         conn = sqlite3.connect("database.db")

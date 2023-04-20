@@ -15,6 +15,6 @@ async def set_value(key, value):
             await f.write(json.dumps(data)) 
         return True
     except Exception as e:
-        print(e)
+        print(f'Setting server value problem: {e}')
         return False
         
