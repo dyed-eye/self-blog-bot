@@ -73,11 +73,11 @@ class button_actions(commands.Cog):
         guild = await server.get_data()
         channel = self.bot.get_channel(guild['channel_moderation'])
         msg = await channel.send(embed=discord.Embed.from_dict({"title":"Заявка на создание блога", "description":f"**{title}**\n{description}", "color":int("ac377c",16), "footer":{"text":f"{interaction.user.name}#{interaction.user.discriminator} ({interaction.user.id})", "icon_url":interaction.user.avatar.url}}), view=buttons.buttons_to_approve())
-        res = await db.commit(f'''UPDATE applications SET status = 'created', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+        res = await db.commit(f'''UPDATE applications SET status = 'created', title = '{title}', description = '{description}', moderation = {msg.id} WHERE author = {interaction.user.id}''')
         while not res:
             print("Creating blog failed on updating application, trying again...")
             time.sleep(2)
-            res = await db.commit(f'''UPDATE applications SET status = 'created', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+            res = await db.commit(f'''UPDATE applications SET status = 'created', title = '{title}', description = '{description}', moderation = {msg.id} WHERE author = {interaction.user.id}''')
         await interaction.user.send("Отлично! Ваша заявка на создание блога уже рассматривается модерацией, ожидайте")
 
     async def edit_blog(self, interaction:discord.Interaction):
@@ -109,11 +109,11 @@ class button_actions(commands.Cog):
         guild = await server.get_data()
         channel = self.bot.get_channel(guild['channel_moderation'])
         msg = await channel.send(embed=discord.Embed.from_dict({"title":"Заявка на редактирование блога", "description":f"**{title}**\n{description}", "color":int("ac377c",16), "footer":{"text":f"{interaction.user.name}#{interaction.user.discriminator} ({interaction.user.id})", "icon_url":interaction.user.avatar.url}}), view=buttons.buttons_to_approve())
-        res = await db.commit(f'''UPDATE applications SET status = 'edited', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+        res = await db.commit(f'''UPDATE applications SET status = 'edited', title = '{title}', description = '{description}', moderation = {msg.id} WHERE author = {interaction.user.id}''')
         while not res:
             print("Editing blog failed on updating application, trying again...")
             time.sleep(2)
-            res = await db.commit(f'''UPDATE applications SET status = 'edited', title = {title}, description = {description}, moderation = {msg.id} WHERE author = {interaction.user.id}''')
+            res = await db.commit(f'''UPDATE applications SET status = 'edited', title = '{title}', description = '{description}', moderation = {msg.id} WHERE author = {interaction.user.id}''')
         await interaction.user.send("Отлично! Ваша заявка на редактирование блога уже рассматривается модерацией, ожидайте")
 
     async def approve(self, interaction:discord.Interaction):
@@ -129,32 +129,32 @@ class button_actions(commands.Cog):
                 await user.send(f'Поздравляю! Ваша заявка на создание блога "{title}" одобрена')
                 presentation, blog = await self.create(author, title, description)
                 datetoday = datetime.today().strftime('%Y-%m-%d')
-                res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, '{title}', '{description}', {presentation}, {blog}, '{datetoday}')''')
                 while not res:
                     print('Approving failed on creation of blog, trying again...')
                     time.sleep(2)
-                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, '{title}', '{description}', {presentation}, {blog}, '{datetoday}')''')
             else:
                 res = await db.get(f"SELECT presentation, blog FROM blogs WHERE author = {author}")
                 if res is None:
                     print('Approving went wrong - no old blog found')
                     print('Creating new blog...')
                     datetoday = datetime.today().strftime('%Y-%m-%d')
-                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                    res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, '{title}', '{description}', {presentation}, {blog}, '{datetoday}')''')
                     while not res:
                         print('Approving failed on creation of blog, trying again...')
                         time.sleep(2)
-                        res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, {title}, {description}, {presentation}, {blog}, {datetoday})''')
+                        res = await db.commit(f'''INSERT INTO blogs VALUES ({author}, '{title}', '{description}', {presentation}, {blog}, '{datetoday}')''')
                     print('New blog created!')
                 else:
                     presentation, blog = res
                     await user.send(f'Поздравляю! Ваша заявка на редактирование блога "{title}" одобрена')
                     presentation = await self.edit(author, title, description, presentation, blog)
-                    res = await db.commit(f'''UPDATE blogs SET title = {title}, description = {description}, presentation = {presentation}, date_of_edit = {datetime.today().strftime('%Y-%m-%d')} WHERE author = {author}''')
+                    res = await db.commit(f'''UPDATE blogs SET title = '{title}', description = '{description}', presentation = {presentation}, date_of_edit = '{datetime.today().strftime('%Y-%m-%d')}' WHERE author = {author}''')
                     while not res:
                         print('Approving failed on editing the blog, trying again...')
                         time.sleep(2)
-                        res = await db.commit(f'''UPDATE blogs SET title = {title}, description = {description}, presentation = {presentation}, date_of_edit = {datetime.today().strftime('%Y-%m-%d')} WHERE author = {author}''')
+                        res = await db.commit(f'''UPDATE blogs SET title = '{title}', description = '{description}', presentation = {presentation}, date_of_edit = '{datetime.today().strftime('%Y-%m-%d')}' WHERE author = {author}''')
             res = await db.commit(f"UPDATE applications SET status = 'approved' WHERE moderation = {interaction.message.id}")
             while not res:
                 print('Approving failed on setting the "approved" status of the application, trying again...')
